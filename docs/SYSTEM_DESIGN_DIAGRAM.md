@@ -41,8 +41,11 @@ flowchart TB
     MR --> BH[Block Header]
     BH --> BID[block_id]
     BH --> TS[timestamp]
+    BH --> TC[transaction_count]
     BH --> PC[previous_hash]
+    BH --> MROOT[merkle_root]
     BH --> NONCE[block nonce]
+    BH --> MID[miner_id]
     BH --> DIFF[difficulty]
 ```
 
@@ -107,14 +110,14 @@ flowchart TD
 ```mermaid
 flowchart TD
     MP[Mempool] --> SEL[Select top pending transactions]
-    SEL --> ROOT[Compute Merkle root]
-    ROOT --> BUILD[Build candidate block]
+    SEL --> COIN[Prepend coinbase reward transaction]
+    COIN --> BUILD[Build candidate block]
+    BUILD --> ROOT[Compute Merkle root]
     BUILD --> POW[Iterate block nonce and hash]
     POW -->|valid hash| APPEND[Append block to chain]
-    APPEND --> REWARD[Add coinbase reward]
     APPEND --> PURGE[Mark confirmed and purge mempool]
     APPEND --> RET[Check retarget window]
-    RET -->|every 10 blocks| ADJ[Adjust difficulty]
+    RET -->|after each mine once window exists| ADJ[Adjust difficulty]
 ```
 
 ## 8. Reinsurance Contribution and Disbursement Flow
@@ -125,7 +128,7 @@ flowchart TD
     ROUTE --> INSPOOL[Insurance Pool]
     ROUTE --> REPOOL[Reinsurance Pool Contribution]
 
-    CLAIM[Approved Claim > 1000 AHT] --> SPLIT[Split settlement]
+    CLAIM[Approved Claim over 1000 AHT] --> SPLIT[Split settlement]
     SPLIT --> PAY1[Insurance Pool pays first 1000]
     SPLIT --> PAY2[Reinsurance Pool pays excess]
     PAY2 --> CHECK[Check available reinsurance balance]
@@ -141,9 +144,10 @@ flowchart TD
     R1 --> R2[Nonce anomaly check]
     R2 --> R3[Overspend check]
     R3 --> R4[Reference integrity check]
-    R4 --> DEC{Suspicious?}
+    R4 --> R5[Large transfer and self-transfer checks]
+    R5 --> DEC{Suspicious?}
     DEC -->|No| PEND[PENDING]
     DEC -->|Yes| SUSP[SUSPICIOUS]
-    SUSP --> REVIEW[Manual review / operator attention]
+    SUSP --> HOLD[Held out of automatic mining]
     PEND --> MINING[Normal mining selection]
 ```

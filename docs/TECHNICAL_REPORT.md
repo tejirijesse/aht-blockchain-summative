@@ -146,7 +146,7 @@ This separation prevents confusion between mining state and account ordering sta
 
 ## 5. Merkle Tree Construction and Verification
 
-The Merkle tree implementation is built from scratch. The miner computes a leaf hash for each transaction using the transaction’s canonical serialization. These leaf hashes are paired and rehashed level by level until a single root remains.
+The Merkle tree implementation is built from scratch. The miner computes a leaf hash for each transaction using the transaction’s canonical serialization. In the current implementation, transaction leaves are hashed once, then parent levels are combined upward until a single root remains.
 
 Rules followed by the implementation:
 
@@ -226,22 +226,23 @@ If the reinsurance pool cannot cover the entire remainder, the project does not 
 Mining is implemented with proof-of-work. The miner:
 
 - selects top-priority pending transactions from the mempool
-- computes the Merkle root
-- constructs the next block
 - prepends a coinbase reward transaction
+- constructs the next block with the coinbase followed by the selected transactions
+- computes the Merkle root over that full transaction list
 - searches block nonces until the block hash has enough leading zero hex digits
 - appends the block to the chain
 - confirms the included transactions
 - applies account and UTXO effects
 - purges finalized mempool entries
 
-Difficulty retargeting is implemented over a ten-block window. The system compares the recent average block time against the configured thresholds:
+Difficulty retargeting is implemented as a sliding-window adjustment over the most recent ten-block span once the chain is long enough. The current code compares the observed span against a single expected span derived from the target block time:
 
-- if average time is below the lower target, difficulty increases
-- if average time is above the upper target, difficulty decreases but not below 1
-- otherwise difficulty remains unchanged
+- if the recent span is below the expected span, difficulty increases by 1
+- if the recent span is above the expected span, difficulty decreases by 1 but never below 1
+- if the span is non-positive, the implementation also treats it as an increase case
+- the check runs after each mined block once the chain has enough history for the ten-block comparison
 
-The chain stores the current difficulty and applies retargeting after mined blocks.
+The chain stores the current difficulty and applies retargeting after mined blocks. The present implementation does not store a separate `last_retarget_block` field and does not print a retarget event summary to the CLI.
 
 ## 10. ECDSA Key Generation, Signing, and Verification
 
@@ -275,6 +276,13 @@ The implemented fraud logic includes checks such as:
 When a transaction is flagged, its mempool status becomes `SUSPICIOUS`. This preserves the audit trail while withholding it from normal mining selection.
 
 The current CLI directly exposes `fraud-scan` and `mempool-list`. The review model is therefore partially implemented operationally through scanning and status transitions, even though the assignment’s named commands `approve_suspicious` and `reject_suspicious` are not exposed under those exact labels in the current CLI.
+
+Two heuristics named explicitly in the assignment brief are not implemented in the current codebase:
+
+- more than 3 claims by a member within 24 hours
+- a claim amount greater than 2 times the provider’s historical average claim amount
+
+Because they are absent from the code, they are also absent from the actual fraud pipeline used by this submission.
 
 ## 12. Disk Persistence Format and Record Layout
 
