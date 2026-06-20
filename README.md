@@ -190,14 +190,18 @@ Available commands:
 ./aht policy-list <chain-file>
 ./aht premium-pay <chain-file> <member-wallet-file> <amount>
 ./aht claim-submit <chain-file> <policy-id> <provider-wallet-file> <amount> <service-ref>
-./aht claim-approve <chain-file> <provider-address> <amount> <claim-id>
-./aht claim-settle <chain-file> <provider-address> <amount> <approval-id>
+./aht claim-approve <chain-file> <provider-address> <amount> <claim-id-or-txid>
+./aht claim-settle <chain-file> <provider-address> <amount> <approval-id-or-txid>
 ./aht mempool-list <chain-file>
 ./aht fraud-scan <chain-file>
 ./aht mine-pending <chain-file> <miner-id>
 ./aht reinsurance-balance <chain-file>
 ./aht mine-empty <chain-file> <miner-id>
 ```
+
+`claim-approve` accepts either a real claim-submission transaction hash or the
+sequence form `CLM-00001`. `claim-settle` accepts either the approval
+transaction hash or the sequence form `APR-00001`.
 
 Example session:
 

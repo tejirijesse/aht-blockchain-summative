@@ -149,8 +149,8 @@ static void print_usage(const char *argv0)
     printf("  %s policy-list <chain-file>\n", argv0);
     printf("  %s premium-pay <chain-file> <member-wallet-file> <amount>\n", argv0);
     printf("  %s claim-submit <chain-file> <policy-id> <provider-wallet-file> <amount> <service-ref>\n", argv0);
-    printf("  %s claim-approve <chain-file> <provider-address> <amount> <claim-id>\n", argv0);
-    printf("  %s claim-settle <chain-file> <provider-address> <amount> <approval-id>\n", argv0);
+    printf("  %s claim-approve <chain-file> <provider-address> <amount> <claim-id-or-txid>\n", argv0);
+    printf("  %s claim-settle <chain-file> <provider-address> <amount> <approval-id-or-txid>\n", argv0);
     printf("  %s mempool-list <chain-file>\n", argv0);
     printf("  %s fraud-scan <chain-file>\n", argv0);
     printf("  %s mine-pending <chain-file> <miner-id>\n", argv0);
@@ -198,6 +198,66 @@ static uint64_t next_nonce(const ChainState *chain, const char *address)
 {
     const Account *account = account_find_const(chain, address);
     return account != NULL ? account->nonce + 1 : 1;
+}
+
+static int find_chain_transaction_id_by_sequence(const ChainState *chain,
+                                                 TransactionType type,
+                                                 int sequence_number,
+                                                 char *out_tx_id,
+                                                 size_t out_tx_id_len)
+{
+    int seen = 0;
+
+    if (chain == NULL || out_tx_id == NULL || out_tx_id_len == 0) return 0;
+    if (sequence_number <= 0) return 0;
+
+    for (int b = 0; b < chain->block_count; b++) {
+        const Block *block = &chain->blocks[b];
+
+        for (int t = 0; t < block->transaction_count; t++) {
+            const Transaction *tx = &block->transactions[t];
+
+            if (tx->transaction_type != type) continue;
+            seen++;
+            if (seen == sequence_number) {
+                snprintf(out_tx_id, out_tx_id_len, "%s", tx->transaction_id);
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int resolve_transaction_reference(const ChainState *chain,
+                                         const char *reference,
+                                         TransactionType type,
+                                         const char *prefix,
+                                         char *out_tx_id,
+                                         size_t out_tx_id_len)
+{
+    const char *digits;
+    char *end = NULL;
+    long sequence_number;
+
+    if (chain == NULL || reference == NULL || out_tx_id == NULL || out_tx_id_len == 0)
+        return 0;
+
+    if (strlen(reference) == HASH_HEX_LEN - 1) {
+        snprintf(out_tx_id, out_tx_id_len, "%s", reference);
+        return 1;
+    }
+
+    if (prefix == NULL) return 0;
+    if (strncmp(reference, prefix, strlen(prefix)) != 0) return 0;
+
+    digits = reference + strlen(prefix);
+    sequence_number = strtol(digits, &end, 10);
+    if (digits[0] == '\0' || end == NULL || *end != '\0' || sequence_number <= 0)
+        return 0;
+
+    return find_chain_transaction_id_by_sequence(chain, type, (int)sequence_number,
+                                                 out_tx_id, out_tx_id_len);
 }
 
 static void seed_account_utxos(ChainState *chain)
@@ -736,6 +796,7 @@ static int run_claim_approve(const char *path, const char *provider_address,
                              const char *amount_text, const char *claim_id)
 {
     const Account *pool;
+    char claim_tx_id[HASH_HEX_LEN];
     Transaction tx;
     double amount;
     WalletMaterial pool_wallet;
@@ -754,8 +815,13 @@ static int run_claim_approve(const char *path, const char *provider_address,
         fprintf(stderr, "insurance pool wallet missing\n");
         return 1;
     }
+    if (!resolve_transaction_reference(&g_chain, claim_id, TX_CLAIM_SUBMISSION, "CLM-",
+                                       claim_tx_id, sizeof(claim_tx_id))) {
+        fprintf(stderr, "claim reference not found on chain: %s\n", claim_id);
+        return 1;
+    }
     if (!tx_make_claim_approval(&tx, pool->address, provider_address, amount,
-                                claim_id, next_nonce(&g_chain, pool->address), now)) {
+                                claim_tx_id, next_nonce(&g_chain, pool->address), now)) {
         fprintf(stderr, "failed to build approval transaction\n");
         return 1;
     }
@@ -778,6 +844,7 @@ static int run_claim_settle(const char *path, const char *provider_address,
 {
     const Account *pool;
     const Account *reinsurance;
+    char approval_tx_id[HASH_HEX_LEN];
     Transaction pool_tx;
     Transaction reinsurance_tx;
     double amount;
@@ -803,12 +870,17 @@ static int run_claim_settle(const char *path, const char *provider_address,
         fprintf(stderr, "system wallets missing\n");
         return 1;
     }
+    if (!resolve_transaction_reference(&g_chain, approval_id, TX_CLAIM_APPROVAL, "APR-",
+                                       approval_tx_id, sizeof(approval_tx_id))) {
+        fprintf(stderr, "approval reference not found on chain: %s\n", approval_id);
+        return 1;
+    }
 
     pool_amount = amount > SETTLEMENT_SPLIT_THRESHOLD ? SETTLEMENT_SPLIT_THRESHOLD : amount;
     excess = amount - pool_amount;
 
     if (!tx_make_claim_settlement(&pool_tx, pool->address, provider_address, pool_amount,
-                                  approval_id, next_nonce(&g_chain, pool->address), now)) {
+                                  approval_tx_id, next_nonce(&g_chain, pool->address), now)) {
         fprintf(stderr, "failed to build pool settlement transaction\n");
         return 1;
     }
@@ -829,7 +901,7 @@ static int run_claim_settle(const char *path, const char *provider_address,
 
         if (payable_excess > 0.0) {
             if (!tx_make_claim_settlement(&reinsurance_tx, reinsurance->address,
-                                          provider_address, payable_excess, approval_id,
+                                          provider_address, payable_excess, approval_tx_id,
                                           next_nonce(&g_chain, reinsurance->address), now)) {
                 fprintf(stderr, "failed to build reinsurance settlement transaction\n");
                 return 1;
