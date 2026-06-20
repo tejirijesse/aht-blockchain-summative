@@ -1,0 +1,14 @@
+# Build artifacts
+build/
+aht
+
+# Persistence output
+data/*.bin
+data/*.dat
+data/*.chain
+data/*.wallet
+
+# Editor / OS
+*.o
+*.dSYM/
+.DS_Store
