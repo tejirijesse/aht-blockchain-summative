@@ -62,7 +62,7 @@ Design goals:
 ## Repository Layout
 
 ```
-aht-blockchain/
+aht-blockchain-summative/
 ├── include/                 # Public module headers
 │   ├── types.h              # Central shared structs, enums, constants
 │   ├── sha256.h             # SHA-256 wrapper API
