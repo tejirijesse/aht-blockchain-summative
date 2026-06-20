@@ -19,7 +19,7 @@ const char GENESIS_PREV_HASH[HASH_HEX_LEN] =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
 #define CHAIN_FILE_MAGIC   "AHTCHAIN"
-#define CHAIN_FILE_VERSION 2u
+#define CHAIN_FILE_VERSION 3u
 
 typedef struct {
     char magic[8];
@@ -39,6 +39,7 @@ int blockchain_init(ChainState *chain, const char *miner_id,
     memset(chain, 0, sizeof(*chain));
     chain->block_count = 0;
     chain->difficulty = difficulty;
+    chain->last_retarget_block = 0;
     chain->block_reward = block_reward;
     chain->insurance_pool_balance = 0.0;
     chain->reinsurance_pool_balance = 0.0;

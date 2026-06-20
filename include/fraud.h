@@ -11,7 +11,9 @@ typedef enum {
     FRAUD_DUPLICATE_ID   = 1 << 3,
     FRAUD_OVERSPEND      = 1 << 4,
     FRAUD_LARGE_TRANSFER = 1 << 5,
-    FRAUD_DANGLING_REF   = 1 << 6
+    FRAUD_DANGLING_REF   = 1 << 6,
+    FRAUD_HIGH_FREQ_CLAIM = 1 << 7,
+    FRAUD_ABNORMAL_CLAIM = 1 << 8
 } FraudFlag;
 
 #define FRAUD_LARGE_TRANSFER_THRESHOLD 50000.0

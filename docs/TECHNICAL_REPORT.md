@@ -146,7 +146,7 @@ This separation prevents confusion between mining state and account ordering sta
 
 ## 5. Merkle Tree Construction and Verification
 
-The Merkle tree implementation is built from scratch. The miner computes a leaf hash for each transaction using the transaction’s canonical serialization. In the current implementation, transaction leaves are hashed once, then parent levels are combined upward until a single root remains.
+The Merkle tree implementation is built from scratch. The miner computes a leaf hash for each transaction using the transaction’s canonical serialization. In the current implementation, transaction leaves are hashed once, and parent levels are combined upward using double SHA-256 until a single root remains.
 
 Rules followed by the implementation:
 
@@ -235,14 +235,13 @@ Mining is implemented with proof-of-work. The miner:
 - applies account and UTXO effects
 - purges finalized mempool entries
 
-Difficulty retargeting is implemented as a sliding-window adjustment over the most recent ten-block span once the chain is long enough. The current code compares the observed span against a single expected span derived from the target block time:
+Difficulty retargeting is implemented on ten-block boundaries once the chain has enough mined history beyond genesis. The system measures the average time across the last ten block gaps and applies the assignment rule directly:
 
-- if the recent span is below the expected span, difficulty increases by 1
-- if the recent span is above the expected span, difficulty decreases by 1 but never below 1
-- if the span is non-positive, the implementation also treats it as an increase case
-- the check runs after each mined block once the chain has enough history for the ten-block comparison
+- if the average block time is less than 30 seconds, difficulty increases by 1
+- if the average block time is greater than 90 seconds, difficulty decreases by 1 but never below 1
+- otherwise difficulty stays unchanged
 
-The chain stores the current difficulty and applies retargeting after mined blocks. The present implementation does not store a separate `last_retarget_block` field and does not print a retarget event summary to the CLI.
+The chain stores both the current difficulty and `last_retarget_block`. Whenever a retarget check runs, the CLI prints the old difficulty, the new difficulty, and the measured average block time.
 
 ## 10. ECDSA Key Generation, Signing, and Verification
 
@@ -272,24 +271,19 @@ The implemented fraud logic includes checks such as:
 - self-transfers
 - large transfers
 - dangling references for claim approval and settlement links
+- more than 3 claims by the same member within a 24-hour window
+- a claim amount greater than 2 times the provider’s historical average claim amount
 
 When a transaction is flagged, its mempool status becomes `SUSPICIOUS`. This preserves the audit trail while withholding it from normal mining selection.
 
 The current CLI directly exposes `fraud-scan` and `mempool-list`. The review model is therefore partially implemented operationally through scanning and status transitions, even though the assignment’s named commands `approve_suspicious` and `reject_suspicious` are not exposed under those exact labels in the current CLI.
-
-Two heuristics named explicitly in the assignment brief are not implemented in the current codebase:
-
-- more than 3 claims by a member within 24 hours
-- a claim amount greater than 2 times the provider’s historical average claim amount
-
-Because they are absent from the code, they are also absent from the actual fraud pipeline used by this submission.
 
 ## 12. Disk Persistence Format and Record Layout
 
 The system uses binary persistence. The on-disk file begins with a small header:
 
 - magic bytes: `AHTCHAIN`
-- version number: `2`
+- version number: `3`
 
 After the header, the program writes the raw `ChainState` structure. This means the saved file contains:
 

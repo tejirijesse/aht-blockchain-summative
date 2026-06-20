@@ -776,8 +776,8 @@ static int run_claim_submit(const char *path, const char *policy_id,
         return 1;
     }
 
-    if (!tx_make_claim_submission(&tx, provider_wallet.address, pool->address, amount,
-                                  service_ref, policy->expiry_date,
+    if (!tx_make_claim_submission(&tx, provider_wallet.address, pool->address,
+                                  policy->member_address, amount, service_ref, policy->expiry_date,
                                   next_nonce(&g_chain, provider_wallet.address), now)) {
         fprintf(stderr, "failed to build claim transaction\n");
         return 1;

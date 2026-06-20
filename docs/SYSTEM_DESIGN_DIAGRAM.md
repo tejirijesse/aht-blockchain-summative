@@ -117,7 +117,7 @@ flowchart TD
     POW -->|valid hash| APPEND[Append block to chain]
     APPEND --> PURGE[Mark confirmed and purge mempool]
     APPEND --> RET[Check retarget window]
-    RET -->|after each mine once window exists| ADJ[Adjust difficulty]
+    RET -->|every 10 mined blocks| ADJ[Adjust difficulty]
 ```
 
 ## 8. Reinsurance Contribution and Disbursement Flow
@@ -145,9 +145,11 @@ flowchart TD
     R2 --> R3[Overspend check]
     R3 --> R4[Reference integrity check]
     R4 --> R5[Large transfer and self-transfer checks]
-    R5 --> DEC{Suspicious?}
+    R5 --> R6[High-frequency member claim check]
+    R6 --> R7[Provider historical average check]
+    R7 --> DEC{Suspicious?}
     DEC -->|No| PEND[PENDING]
     DEC -->|Yes| SUSP[SUSPICIOUS]
-    SUSP --> HOLD[Held out of automatic mining]
+    SUSP --> HOLD[Held out of automatic mining and sent for manual review]
     PEND --> MINING[Normal mining selection]
 ```

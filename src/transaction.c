@@ -34,9 +34,10 @@ size_t tx_serialize_signable(const Transaction *tx, char *out, size_t out_cap)
      * platforms; explicit '|' separators prevent field-boundary collisions.
      */
     written = snprintf(out, out_cap,
-                       "%s|%s|%.8f|%d|%lld|%llu|%lld|%s",
+                       "%s|%s|%s|%.8f|%d|%lld|%llu|%lld|%s",
                        tx->sender_address,
                        tx->receiver_address,
+                       tx->related_member_address,
                        tx->amount,
                        (int)tx->transaction_type,
                        (long long)tx->timestamp,
@@ -220,14 +221,16 @@ int tx_make_pre_authorization(Transaction *out, const char *provider_addr,
 }
 
 int tx_make_claim_submission(Transaction *out, const char *provider_addr,
-                             const char *pool_addr, double amount,
+                             const char *pool_addr, const char *member_addr, double amount,
                              const char *ref_service_id, time_t policy_expiry,
                              uint64_t nonce, time_t now)
 {
-    if (provider_addr == NULL || pool_addr == NULL) return 0;
+    if (provider_addr == NULL || pool_addr == NULL || member_addr == NULL) return 0;
     if (!tx_init_common(out, provider_addr, pool_addr, amount,
                         TX_CLAIM_SUBMISSION, nonce, now))
         return 0;
+    snprintf(out->related_member_address, sizeof(out->related_member_address), "%s",
+             member_addr);
     tx_set_ref(out, ref_service_id);
 
     /* Carry the member's policy expiry so downstream logic can reject claims

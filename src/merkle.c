@@ -40,10 +40,11 @@ void merkle_leaf_hash(const Transaction *tx, char out_hex[HASH_HEX_LEN])
      * amount uses a fixed precision to stay deterministic across platforms.
      */
     snprintf(buf, sizeof(buf),
-             "%s|%s|%s|%.8f|%d|%lld|%llu|%lld|%s",
+             "%s|%s|%s|%s|%.8f|%d|%lld|%llu|%lld|%s",
              tx->transaction_id,
              tx->sender_address,
              tx->receiver_address,
+             tx->related_member_address,
              tx->amount,
              (int)tx->transaction_type,
              (long long)tx->timestamp,

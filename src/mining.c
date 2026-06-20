@@ -18,6 +18,7 @@
 #include "blockchain.h"
 #include "transaction.h"
 
+#include <stdio.h>
 #include <string.h>
 
 int mining_proof_of_work(Block *block, int difficulty,
@@ -117,35 +118,42 @@ int mining_retarget_difficulty(ChainState *chain)
 {
     const Block *last;
     const Block *first;
-    time_t actual_span;
-    time_t expected_span;
+    double average_time;
+    int old_difficulty;
+    int new_difficulty;
 
     if (chain == NULL) return 0;
 
-    /*
-     * Retargeting needs a full window of MINING_RETARGET_INTERVAL blocks above
-     * genesis to measure. Until then, leave difficulty untouched.
-     */
-    if (chain->block_count <= MINING_RETARGET_INTERVAL)
+    if (chain->block_count <= MINING_RETARGET_INTERVAL + 1)
+        return chain->difficulty;
+    if (chain->last_retarget_block > 0 &&
+        chain->block_count - 1 < chain->last_retarget_block + MINING_RETARGET_INTERVAL)
         return chain->difficulty;
 
-    /* The most recent window: the last interval+1 blocks bound `interval` gaps. */
     last = &chain->blocks[chain->block_count - 1];
     first = &chain->blocks[chain->block_count - 1 - MINING_RETARGET_INTERVAL];
+    average_time = (double)(last->timestamp - first->timestamp) /
+                   (double)MINING_RETARGET_INTERVAL;
 
-    actual_span = last->timestamp - first->timestamp;
-    expected_span = (time_t)MINING_RETARGET_INTERVAL * MINING_TARGET_BLOCK_TIME;
+    old_difficulty = chain->difficulty;
+    new_difficulty = old_difficulty;
 
-    /*
-     * Too fast (blocks arrived in less than the expected span) -> make the work
-     * harder. Too slow -> ease off, but never below MINING_MIN_DIFFICULTY. A
-     * non-positive span (clock skew / equal timestamps) is treated as "too fast".
-     */
-    if (actual_span <= 0 || actual_span < expected_span) {
-        chain->difficulty += 1;
-    } else if (actual_span > expected_span) {
-        if (chain->difficulty > MINING_MIN_DIFFICULTY)
-            chain->difficulty -= 1;
+    if (average_time < 30.0) {
+        new_difficulty += 1;
+    } else if (average_time > 90.0) {
+        if (new_difficulty > MINING_MIN_DIFFICULTY)
+            new_difficulty -= 1;
+    }
+
+    chain->difficulty = new_difficulty;
+    chain->last_retarget_block = chain->block_count - 1;
+
+    if (old_difficulty != new_difficulty) {
+        printf("difficulty retarget at block %d: old=%d new=%d average_block_time=%.2f\n",
+               chain->last_retarget_block, old_difficulty, new_difficulty, average_time);
+    } else {
+        printf("difficulty retarget at block %d: unchanged=%d average_block_time=%.2f\n",
+               chain->last_retarget_block, new_difficulty, average_time);
     }
 
     return chain->difficulty;

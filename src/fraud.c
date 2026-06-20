@@ -71,6 +71,69 @@ static int fraud_tx_uses_ref(const Transaction *tx)
            tx->transaction_type == TX_CLAIM_SETTLEMENT;
 }
 
+static int fraud_is_claim_submission(const Transaction *tx)
+{
+    return tx != NULL && tx->transaction_type == TX_CLAIM_SUBMISSION;
+}
+
+static int fraud_count_member_claims_24h(const ChainState *chain,
+                                         const Transaction *tx)
+{
+    int count = 0;
+    time_t window_start;
+
+    if (chain == NULL || tx == NULL || tx->related_member_address[0] == '\0')
+        return 0;
+
+    window_start = tx->timestamp - SECONDS_PER_DAY;
+
+    for (int b = 0; b < chain->block_count; b++) {
+        const Block *block = &chain->blocks[b];
+        for (int t = 0; t < block->transaction_count; t++) {
+            const Transaction *other = &block->transactions[t];
+            if (!fraud_is_claim_submission(other)) continue;
+            if (strcmp(other->related_member_address, tx->related_member_address) != 0)
+                continue;
+            if (other->timestamp >= window_start && other->timestamp <= tx->timestamp)
+                count++;
+        }
+    }
+
+    for (int i = 0; i < chain->mempool.count; i++) {
+        const Transaction *other = &chain->mempool.entries[i].tx;
+        if (strcmp(other->transaction_id, tx->transaction_id) == 0) continue;
+        if (!fraud_is_claim_submission(other)) continue;
+        if (strcmp(other->related_member_address, tx->related_member_address) != 0)
+            continue;
+        if (other->timestamp >= window_start && other->timestamp <= tx->timestamp)
+            count++;
+    }
+
+    return count;
+}
+
+static double fraud_provider_historical_avg_claim(const ChainState *chain,
+                                                  const Transaction *tx)
+{
+    double sum = 0.0;
+    int count = 0;
+
+    if (chain == NULL || tx == NULL) return 0.0;
+
+    for (int b = 0; b < chain->block_count; b++) {
+        const Block *block = &chain->blocks[b];
+        for (int t = 0; t < block->transaction_count; t++) {
+            const Transaction *other = &block->transactions[t];
+            if (!fraud_is_claim_submission(other)) continue;
+            if (strcmp(other->sender_address, tx->sender_address) != 0) continue;
+            sum += other->amount;
+            count++;
+        }
+    }
+
+    return count > 0 ? sum / (double)count : 0.0;
+}
+
 unsigned int fraud_check_tx(const ChainState *chain, const Transaction *tx,
                             char *reason, int reason_len)
 {
@@ -125,6 +188,21 @@ unsigned int fraud_check_tx(const ChainState *chain, const Transaction *tx,
             !fraud_tx_id_on_chain(chain, tx->ref_transaction_id)) {
             flags |= FRAUD_DANGLING_REF;
             fraud_set_reason(reason, reason_len, "dangling reference");
+        }
+    }
+
+    if (fraud_is_claim_submission(tx)) {
+        if (fraud_count_member_claims_24h(chain, tx) >= 3) {
+            flags |= FRAUD_HIGH_FREQ_CLAIM;
+            fraud_set_reason(reason, reason_len, "high-frequency claims");
+        }
+
+        {
+            double historical_avg = fraud_provider_historical_avg_claim(chain, tx);
+            if (historical_avg > 0.0 && tx->amount > 2.0 * historical_avg) {
+                flags |= FRAUD_ABNORMAL_CLAIM;
+                fraud_set_reason(reason, reason_len, "abnormal claim amount");
+            }
         }
     }
 

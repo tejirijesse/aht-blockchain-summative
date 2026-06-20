@@ -112,7 +112,7 @@ int tx_make_pre_authorization(Transaction *out, const char *provider_addr,
  * reject claims against an EXPIRED policy.
  */
 int tx_make_claim_submission(Transaction *out, const char *provider_addr,
-                             const char *pool_addr, double amount,
+                             const char *pool_addr, const char *member_addr, double amount,
                              const char *ref_service_id, time_t policy_expiry,
                              uint64_t nonce, time_t now);
 

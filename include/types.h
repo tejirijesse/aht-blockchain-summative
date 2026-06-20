@@ -103,6 +103,7 @@ typedef struct {
     char            transaction_id[HASH_HEX_LEN];
     char            sender_address[ADDRESS_LEN];
     char            receiver_address[ADDRESS_LEN];
+    char            related_member_address[ADDRESS_LEN];
     double          amount;
     TransactionType transaction_type;
     time_t          timestamp;
@@ -228,6 +229,7 @@ typedef struct {
     Token    token;
 
     int      difficulty;                   /* current PoW difficulty        */
+    int      last_retarget_block;          /* height at last retarget       */
     double   block_reward;                 /* configurable miner reward     */
 
     /* Pools tracked for insurance economics / auditing. */
